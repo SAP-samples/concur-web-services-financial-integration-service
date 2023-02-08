@@ -1,0 +1,397 @@
+{
+	"info": {
+		"_postman_id": "6dd9d8fd-6871-437f-8dfd-60183ac914da",
+		"name": "Financial Integration Service - sample",
+		"description": "**Introduction**\n\nThis collection will demonstrate how to use the Financial Integration Service API for pulling approved expense reports from SAP Concur and posting into your ERP. It allows for near real time bi-directional integration between the two applications.\n\nThe complete Financial Integration Service documentation [can be found here](https://developer.concur.com/api-reference/financial-integration/v4.financial-integration.html).\n\n**Prerequisites**\n\nThis collection does not contain the necessary API calls needed for authentication with Concur. Please reference this [GitHub repository](https://github.com/SAP-samples/concur-web-services-authentication) and/or [this post](https://blogs.sap.com/2023/01/23/introduction-to-web-services-for-concur-expense-authentication/) for information on authentication methodology and the global variables used by this collection. The application SCOPEs required are:\n\n- FISVC\n    \n\n**Special Variables**\n\nWithin the collection there are 3 collection variables that are used:\n\n- doctype - the most common doctype is 'expense'. There are 4 other doctypes available and they can be substituted in as necessary.\n- docId - this is the document id of the _financial_ _document_ within Concur Expense. Normally there is one financial document per expense report however if a document fails to post and it is rejected in the Post FIS Confirmation (see below), when that expense report is resubmitted, it will create another _financial_ _document_.\n- reportID - this is a special variable that can be used to GET one expect report from within Concur.\n    \n\n**Detailed Description**\n\nThere are 8 data steps needed to to process an expense report. Assuming you have authenticated and obtained an access token, they are:\n\n1. Send a GET require to Concur Expense to request all expense reports that are fully approved and are waiting to post.\n    1. This is demonstrated by \"1 - Get FIS Transactions - All\"\n2. You receive a response from Concur with all the expense reports (there could be none waiting)\n3. Send an Acknowledgement to Concur that locks the expense report from being changed by Concur. This request could fail if the expense report was recalled back to the employee/processor. If that is the case, **do not post the expense report**.\n    1. This is demonstrated by \"3 - Post FIS Acknowledgement\"\n4. Try to post the expense report in your ERP\n5. Receive a response from the ERP that the posting worked, or it failed for some reason\n6. Send a Posting Confirmation to Concur Expense with the appropriate status (success/failure).\n    1. This is demonstrated by \"6s - Post FIS Confirmations - Success\" and \"6f - Post FIS Confirmations - Failure\"\n7. (optional) At some point in the future, you will receive and acknowledgement from your payment application (payroll, account payables, etc) that payment has been made for this expense report.\n8. (optional) Send a message to Concur Expense to update the status with the payment information.\n    1. This is demonstrated by \"8 - Post FIS Payment Confirmation\"\n\nThis postman collection will not provide examples for actual posting into your ERP as that is destination system specific.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "16379329"
+	},
+	"item": [
+		{
+			"name": "1 - Get FIS Transactions - All",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Initialize\", function () {\r",
+							"\r",
+							"    pm.response.to.not.be.error;\r",
+							"    pm.response.to.not.have.jsonBody(\"error\");\r",
+							"\r",
+							"    var jsonData = pm.response.json();\r",
+							"    var contents = jsonData.content['0'];\r",
+							"    var id = contents.id;\r",
+							"    \r",
+							"    pm.collectionVariables.set(\"docId\", id);\r",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"protocolProfileBehavior": {
+				"disabledSystemHeaders": {}
+			},
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "application/json",
+						"type": "default"
+					},
+					{
+						"key": "DocumentFormatAs",
+						"value": "json",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"url": {
+					"raw": "https://{{dataCenterURI}}/financialintegration/fi/v4/companies/transactiontypes/:doctype/transactions",
+					"protocol": "https",
+					"host": [
+						"{{dataCenterURI}}"
+					],
+					"path": [
+						"financialintegration",
+						"fi",
+						"v4",
+						"companies",
+						"transactiontypes",
+						":doctype",
+						"transactions"
+					],
+					"query": [
+						{
+							"key": "page",
+							"value": "0",
+							"description": "Starting page number.",
+							"disabled": true
+						},
+						{
+							"key": "limit",
+							"value": "25",
+							"description": "Number of records to return per page. Default: 25.",
+							"disabled": true
+						},
+						{
+							"key": "systemId",
+							"value": "",
+							"description": "The external Partner System ID that processed the document.  Needed for ERP filtering.  Maximum 50 characters.",
+							"disabled": true
+						}
+					],
+					"variable": [
+						{
+							"key": "doctype",
+							"value": "{{doctype}}",
+							"description": "REQUIRED The financial document type to return. Only one type of transaction can be retrieved at a time. Supported values are: expense, invoice, cashadvance, payroll, obligation."
+						}
+					]
+				},
+				"description": "This GET commend will fetch all fully approved expense reports.\n\nIt will also update the **docId** variable with the docID of the first document returned. This is so you can use the other API examples to see how FIS functions.\n\nRemember, **docId** is NOT the report ID, report number or report key within Concur. It is the _financial document_ id that is generated every time and expense report is fully approved. If the expense report is rejected and resubmitted, it will have a different **docId**."
+			},
+			"response": []
+		},
+		{
+			"name": "Get FIS Transactions- One",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							""
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"protocolProfileBehavior": {
+				"disabledSystemHeaders": {}
+			},
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "application/json",
+						"type": "default"
+					},
+					{
+						"key": "DocumentFormatAs",
+						"value": "json",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"url": {
+					"raw": "https://{{dataCenterURI}}/financialintegration/fi/v4/companies/transactiontypes/:doctype/transactions?docId={{reportId}}&ignoreDocumentStatus=yes",
+					"protocol": "https",
+					"host": [
+						"{{dataCenterURI}}"
+					],
+					"path": [
+						"financialintegration",
+						"fi",
+						"v4",
+						"companies",
+						"transactiontypes",
+						":doctype",
+						"transactions"
+					],
+					"query": [
+						{
+							"key": "page",
+							"value": "0",
+							"description": "Starting page number.",
+							"disabled": true
+						},
+						{
+							"key": "limit",
+							"value": "25",
+							"description": "Number of records to return per page. Default: 25.",
+							"disabled": true
+						},
+						{
+							"key": "systemId",
+							"value": "",
+							"description": "The external system ID that processed the document. Maximum 50 characters.",
+							"disabled": true
+						},
+						{
+							"key": "docId",
+							"value": "{{reportId}}"
+						},
+						{
+							"key": "ignoreDocumentStatus",
+							"value": "yes"
+						}
+					],
+					"variable": [
+						{
+							"key": "doctype",
+							"value": "{{doctype}}",
+							"description": "REQUIRED The financial document type to return. Only one type of transaction can be retrieved at a time. Supported values are: expense, invoice, cashadvance, payroll, obligation."
+						}
+					]
+				},
+				"description": "This call is provided for debugging purposes only. It allows you to fetch all _financial documents_ associated with an expense report. It **ignores document status**. Please review the **docStatus** field to understand where in the flow that document is\n\nPlease note that if no documents are returned, the expense report either does not exist or it is not fully approved."
+			},
+			"response": []
+		},
+		{
+			"name": "3 - Post FIS Acknowledgements",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"systemId\" : \"Postman\",\r\n  \"ids\": [ \"{{docId}}\" ]\r\n}\r\n"
+				},
+				"url": {
+					"raw": "https://{{dataCenterURI}}/financialintegration/fi/v4/companies/transactiontypes/:doctype/transactions/acknowledgements",
+					"protocol": "https",
+					"host": [
+						"{{dataCenterURI}}"
+					],
+					"path": [
+						"financialintegration",
+						"fi",
+						"v4",
+						"companies",
+						"transactiontypes",
+						":doctype",
+						"transactions",
+						"acknowledgements"
+					],
+					"variable": [
+						{
+							"key": "doctype",
+							"value": "{{doctype}}",
+							"description": "Required The financial document type. Only one type of transaction can be acknowledged at a time. Supported values: expense, invoice, cashadvance, payroll, obligation."
+						}
+					]
+				},
+				"description": "For more explanation on this API. go [here](https://developer.concur.com/api-reference/financial-integration/v4.financial-integration.html#post-financial-transaction-acknowledgements)\n\n**systemId** is not required but is useful if you have multiple ERPs. That way you know who made the updates.\n\n**docId**s must be in an id array. For example: \\[ \"123\",\"456\"\\]"
+			},
+			"response": []
+		},
+		{
+			"name": "6s - Post FIS Confirmations - Success",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"systemId\":\"Postman\",\r\n  \"postingConfirmations\":\r\n  [\r\n    {\r\n      \"docId\":\"{{docId}}\",\r\n      \"overallPostingStatusCode\":\"success\",\r\n      \"postingDocs\":\r\n      [\r\n        {\r\n          \"companyId\":\"0100\",\r\n          \"documentNumber\":\"0123456\",\r\n          \"fiscalYear\":\"2022\",\r\n          \"paymentRelevantLineItems\":[],\r\n          \"postingDate\":\"2022-05-27\"\r\n        },\r\n        {\r\n          \"companyId\":\"FISID\",\r\n          \"documentNumber\":\"987654\",\r\n          \"fiscalYear\":\"2022\",\r\n          \"paymentRelevantLineItems\":[],\r\n          \"postingDate\":\"2022-05-27\"\r\n        }\r\n      ],\r\n      \"systemMessages\": [ ]\r\n    }\r\n  ]\r\n}"
+				},
+				"url": {
+					"raw": "https://{{dataCenterURI}}/financialintegration/fi/v4/companies/transactiontypes/:doctype/transactions/postingconfirmations",
+					"protocol": "https",
+					"host": [
+						"{{dataCenterURI}}"
+					],
+					"path": [
+						"financialintegration",
+						"fi",
+						"v4",
+						"companies",
+						"transactiontypes",
+						":doctype",
+						"transactions",
+						"postingconfirmations"
+					],
+					"variable": [
+						{
+							"key": "doctype",
+							"value": "{{doctype}}"
+						}
+					]
+				},
+				"description": "For more information on this API, go [here](https://developer.concur.com/api-reference/financial-integration/v4.financial-integration.html#post-financial-transactions-confirmations).\n\n**systemId** is not required but is useful if you have multiple ERPs. That way you know who made the updates.\n\nWithin the postingDocs, only provide the data you feel is necessary. We recommend:\n\n- documentNumber (to cross reference the document identified within your ERP)\n- postingDate (so you know when it is posted).\n    \n\nEach line provided will update the audit trail within Concur as well as update the expense report status from \"Pending Payment\" to \"Sent for Payment\".\n\nIn this example, there will be two audit trail lines."
+			},
+			"response": []
+		},
+		{
+			"name": "6f - Post FIS Confirmations - Failure",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"systemId\":\"Postman\",\r\n  \"postingConfirmations\":\r\n  [\r\n    {\r\n      \"docId\":\"{{docId}}\",\r\n      \"overallPostingStatusCode\":\"error\",\r\n      \"postingDocs\":[],\r\n      \"systemMessages\":\r\n      [\r\n        {\r\n          \"concurTransactionLineItemId\":\"\",\r\n          \"messageId\":\"010-CTE-POSTING\",\r\n          \"messageLanguage\":\"EN\",\r\n          \"messageLongText\":\"\",\r\n          \"messageShortText\":\"Expense Report {ReportKey} of system CONCUR could not be posted.\"\r\n        },\r\n        {\r\n          \"concurTransactionLineItemId\":\"\",\r\n          \"messageId\":\"003-CC\",\r\n          \"messageLanguage\":\"EN\",\r\n          \"messageLongText\":\"\",\r\n          \"messageShortText\":\"Profit centre /company code assignment is not correct. Check the entry.\"\r\n        }\r\n      ]\r\n    }\r\n  ]\r\n}"
+				},
+				"url": {
+					"raw": "https://{{dataCenterURI}}/financialintegration/fi/v4/companies/transactiontypes/:doctype/transactions/postingconfirmations",
+					"protocol": "https",
+					"host": [
+						"{{dataCenterURI}}"
+					],
+					"path": [
+						"financialintegration",
+						"fi",
+						"v4",
+						"companies",
+						"transactiontypes",
+						":doctype",
+						"transactions",
+						"postingconfirmations"
+					],
+					"variable": [
+						{
+							"key": "doctype",
+							"value": "{{doctype}}"
+						}
+					]
+				},
+				"description": "For more information on this API, go [here](https://developer.concur.com/api-reference/financial-integration/v4.financial-integration.html#post-financial-transactions-confirmations).\n\n**systemId** is not required but is useful if you have multiple ERPs. That way you know who made the updates.\n\nFor Failures, leave the **postingDocs** empty and provide **systemMessages**. Provide as much information as possible. These messages are seen by the employee as well as the expense processor. Based on the message, they can take appropriate action.\n\nEach line provided will update the audit trail within Concur as well as update the expense report status from \"Pending Payment\" to \"Financial Posting Failed\".\n\nIn this example, there will be two audit trail lines."
+			},
+			"response": []
+		},
+		{
+			"name": "8 - Post FIS Payment Confirmation",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"_comment_1\": \"ref: https://developer.concur.com/api-reference/financial-integration/v4.financial-integration.html#post-financial-payment-confirmations\",\r\n\r\n  \"systemId\":\"Postman\",\r\n  \"processingConfirmation\":\r\n  [\r\n    {\r\n      \"docId\":\"{{docId}}\",\r\n      \"processingStatusCode\":\"CP\",\r\n      \"clearingDetails\":[\r\n        {\r\n          \"clearingDate\":\"2022-05-27T12:00:00.27Z\",\"clearingAmount\":220.00,\r\n          \"clearingCurrency\":\"USD\",\"receiver\":{\"receiverId\":\"22344\",\r\n          \"receiverName\":\"Charles\",\"receiverType\":\"EMPLOYEE\"},\r\n          \"clearingReference\":{\"companyCode\":\"FISID\",\"financialDocumentId\":\"987654\",\r\n          \"fiscalYear\":\"2022\",\"paymentRef\":\"US01/667799/2022/3\",\"paymentMethod\":\"E\"}\r\n        }\r\n      ]\r\n    }\r\n  ]\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://{{dataCenterURI}}/financialintegration/fi/v4/companies/transactiontypes/:doctype/transactions/paymentconfirmations",
+					"protocol": "https",
+					"host": [
+						"{{dataCenterURI}}"
+					],
+					"path": [
+						"financialintegration",
+						"fi",
+						"v4",
+						"companies",
+						"transactiontypes",
+						":doctype",
+						"transactions",
+						"paymentconfirmations"
+					],
+					"variable": [
+						{
+							"key": "doctype",
+							"value": "{{doctype}}"
+						}
+					]
+				},
+				"description": "For more information on this API, go [here](https://developer.concur.com/api-reference/financial-integration/v4.financial-integration.html#post-financial-payment-confirmations).\n\n**systemId** is not required but is useful if you have multiple ERPs. That way you know who made the updates.\n\n**processingStatusCode** is either PP (Partial Payment) or CP (Completed Payment). Only CP will update the expense reports status from \"Sent for Payment\" to \"Payment Confirmed\". Once Payment Confirmed, the expense report cannot be modified.\n\nIf you send a PP, it is expected that you will follow up with a CP at some later date.\n\n**clearingDetails** will update the audit trail within Concur with this information. Provide enough information so the employee can reconcile payment as necessary. Please note that **paymentRef** must be unique within the expense report. And subsequent clearing details with that **paymentRef** will cause an error."
+			},
+			"response": []
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{accessToken}}",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "doctype",
+			"value": "expense"
+		},
+		{
+			"key": "docId",
+			"value": "from GET request"
+		},
+		{
+			"key": "reportId",
+			"value": "Report ID"
+		}
+	]
+}
