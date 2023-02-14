@@ -12,6 +12,8 @@ the following process steps:
 3) Confirm each Financial Transaction posted (success or fail)
 4) Mark each Financial Transaction as paid (optional but recommended)
 
+For an understanding on how to use this repository, read the following [blog post](https://blogs.sap.com/2023/02/10/sap-concurs-financial-integration-service-explained./)
+
 ## Requirements
 In order to use this repository you will need
 1) The Web Service Administration role within SAP Concur (to be able to create SAP Concur applications)
